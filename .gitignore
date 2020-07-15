@@ -3,3 +3,5 @@
 .ionide
 
 .fake
+
+*.db

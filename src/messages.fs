@@ -9,11 +9,14 @@ type LogEntry=
 
 type Message(src:string)=
     let mutable _src=src
-    member me._kind="Message"
+    let mutable _stamp=0
+    member me._kind="Message"    
     member me.src
         with get()=_src
         and  set(value)= _src <- value
-
+    member me.stamp
+        with get()=_stamp
+        and  set(value)= _stamp <- value
 
 type RequestVoteA(src, term:int, candidateId:string, lastLogIndex:int, lastLogTerm:int )=
     inherit Message(src)

@@ -5,10 +5,11 @@ open System.Net.Sockets
 open System.Diagnostics
 open System.Threading
 open Newtonsoft.Json
-
+open Microsoft.FSharp.Control
 
 open MyNamespace.helpers
-open Microsoft.FSharp.Control
+open MyNamespace.dblogger
+
 
 type NodeState =
     | FOLLOWER  = 0
@@ -19,6 +20,8 @@ type NodeState =
 type Node(name:string, endpoint:string, config:string list) as me=
     let udp = new UdpClient( IPEndPoint.Parse(endpoint) )
     let peers = List.filter (fun x -> x<>endpoint ) config
+
+    let _id = name.Substring(name.Length-1)
 
     let mutable _state= NodeState.FOLLOWER
 
@@ -55,10 +58,52 @@ type Node(name:string, endpoint:string, config:string list) as me=
     let mutable _nextIndex:Map<string,int>=Map.empty
     let mutable _matchIndex:Map<string,int>=Map.empty
 
+    //state machine logging
+    let mutable _zlogPrevState=""
+    let zlogState stagex =
+        let obj ={|
+                _kind       = "node" + _id
+                stamp       = 0 //stamp is added latter to log only changed states
+                state       = sprintf "%A" _state
+                stage       = stagex           
+                logBaseIndex= _logBaseIndex
+                logBaseTerm = _logBaseTerm
+                currTerm    = _currTerm            
+                votedFor    = _currTerm
+                log         = _log |> List.truncate 10 
+                //Volatile
+                commIndex   = _commIndex
+                lastApplied = _lastApplied
+                //Leader only
+                nextIndex   = _nextIndex
+                matchIndex  = _matchIndex 
+            |}
+        let json=JsonConvert.SerializeObject(obj)
+        
+        if _zlogPrevState <> json then
+            _zlogPrevState <-json
+            let obj={|obj with stamp=stamp()|}
+            let json=JsonConvert.SerializeObject(obj)
+            me.zlog json
+            zdblog _id obj.stamp json
+    let zlogStateMsg (msg:Message) =
+        let json=JsonConvert.SerializeObject(msg)
+        me.zlog json
+        zdblog _id msg.stamp json
+    let zlogStateCmd cmdx =
+        let obj ={|
+            _kind  = "Command"
+            stamp  = stamp()
+            cmd    = cmdx
+            |}
+        let json=JsonConvert.SerializeObject(obj)
+        me.zlog json
+        zdblog _id obj.stamp json
 
     let _statemachine=new MailboxProcessor<Message>( fun inbox ->
         //===================================================================
         let rec followerState (stage:int) =
+            zlogState stage
             async{                
                 _state <- NodeState.FOLLOWER
                 me.zlog <| sprintf "%A%s" _state me.plog
@@ -79,6 +124,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
                     ()
 
                 let! msg=inbox.TryReceive(_stepwait)
+                if msg.IsSome then zlogStateMsg msg.Value
                 if msg.IsSome then 
                     me.TimerRestart()
                 match msg with
@@ -211,6 +257,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
             }
         //===================================================================
         and candidateState (stage:int) =
+            zlogState stage
             async{
                 _state <- NodeState.CANDIDATE
                 me.zlog <| sprintf "%A" _state
@@ -241,6 +288,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
                     ()
 
                 let! msg=inbox.TryReceive(_stepwait)
+                if msg.IsSome then zlogStateMsg msg.Value
                 match msg with
                 |None    ->
                             return! candidateState 1
@@ -276,6 +324,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
             }
         //====================================================================
         and leaderState (stage:int) =
+            zlogState stage
             async{
                 _state <- NodeState.LEADER
                 me.zlog <| sprintf "%A  %s" _state me.plog
@@ -331,6 +380,9 @@ type Node(name:string, endpoint:string, config:string list) as me=
                     let ccmd = triggerClientMsg.Value
                     triggerClientMsg <- None                 
                     me.zlog <|  sprintf "\n\n\n===============\nClient msg : %A" ccmd
+
+                    zlogStateCmd ccmd
+
                     _log <- {term=_currTerm; cmd=ccmd } :: _log                        
                     
                     peers |> List.iter heartbeatFun 
@@ -356,6 +408,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
                     ()
 
                 let! msg=inbox.TryReceive(_stepwait)
+                if msg.IsSome then zlogStateMsg msg.Value
                 match msg with
                 |None     ->
                             return! leaderState 1
@@ -432,6 +485,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
 
     do
         try
+            
             printfn "id %A udp %A peers %A" name endpoint peers
             printfn "election timeout %A" _electtimeout
             udp.DontFragment <- true
@@ -466,7 +520,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
 
     member me.zlog s=
         Monitor.Enter lockobj
-        printfn "id:%s | %s" name s
+        printfn "id:%s | %s" _id s
         Monitor.Exit lockobj
 
 
@@ -480,6 +534,9 @@ type Node(name:string, endpoint:string, config:string list) as me=
 
     member me.SendMessage(edp:string, msg:Message)=
         let edp=IPEndPoint.Parse(edp)
+        msg.src <- "node" + _id
+        msg.stamp <- stamp()
+        zlogStateMsg msg
         let json=JsonConvert.SerializeObject(msg)
         let payload=System.Text.Encoding.UTF8.GetBytes(json)
         // Thread.Sleep( (new System.Random()).Next(100))  
@@ -504,13 +561,13 @@ type Node(name:string, endpoint:string, config:string list) as me=
         let mutable i=0
         while true do
             Thread.Sleep(4000)
-            triggerClientMsg <- Some (sprintf "cmd%A" i)
+            triggerClientMsg <- Some (sprintf "%scmd%A" _id i)
             i <- i + 1
 
-        Thread.Sleep(8000)
-        triggerClientMsg <- Some "cmd0"
-        Thread.Sleep(8000)
-        triggerClientMsg <- Some "cmd1"        
+        // Thread.Sleep(8000)
+        // triggerClientMsg <- Some "cmd0"
+        // Thread.Sleep(8000)
+        // triggerClientMsg <- Some "cmd1"        
 
         )     
     member public me.Start()=  

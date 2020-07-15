@@ -10,6 +10,8 @@ open System.Threading.Tasks
 
 open MyNamespace.Raft
 
+let globaltimer=Stopwatch.StartNew()
+let stamp() = int globaltimer.Elapsed.TotalMilliseconds
 
 let lockobj=new obj()
 
@@ -52,7 +54,8 @@ let ParseMessage (edp:IPEndPoint) (payload:byte array) =
 
 
         assert(json=JsonConvert.SerializeObject(msg))        
-        msg.src <- edp.ToString()        
+        msg.src <- edp.ToString()
+        msg.stamp <- stamp()        
         msg
 
 
