@@ -19,6 +19,8 @@ CONSENSUS: BRIDGING THEORY AND PRACTICE  PhD thesis of Diego Ongaro
 # How to start
 Just run the debuger ...
 
+Now you have a protocol viewer. Just open http://127.0.0.1:8080/ to see the rollup
+
 # Testing
 Play with the following line inside nodeAraft.fs just to see how the 
 replicated log survives random leader stops (crashes) and  resumes

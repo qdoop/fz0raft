@@ -1,19 +1,17 @@
 module MyNamespace.helpers
 
 open System.Net
-open System.Net.Sockets
 open System.Diagnostics
 open Newtonsoft.Json
-open System.Threading
 open System.Threading
 open System.Threading.Tasks
 
 open MyNamespace.Raft
 
-let globaltimer=Stopwatch.StartNew()
-let stamp() = int globaltimer.Elapsed.TotalMilliseconds
+let globaltimeBase=System.DateTime.UtcNow //Stopwatch.StartNew()
+let stamp() = int (System.DateTime.UtcNow - globaltimeBase).TotalMilliseconds //int globaltimer.Elapsed.TotalMilliseconds
 
-let lockobj=new obj()
+
 
 let mutable triggerClientMsg:string option=None
 

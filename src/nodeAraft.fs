@@ -7,8 +7,10 @@ open System.Threading
 open Newtonsoft.Json
 open Microsoft.FSharp.Control
 
+open MyNamespace.globals
 open MyNamespace.helpers
 open MyNamespace.dblogger
+open MyNamespace.filelogger
 
 
 type NodeState =
@@ -25,7 +27,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
 
     let mutable _state= NodeState.FOLLOWER
 
-    let mutable _timer=Stopwatch.StartNew()
+    let mutable _timebase=System.DateTime.UtcNow//Stopwatch.StartNew()
     let maxtimeout=7000
     let mintimeout=5000
     let mutable _electtimeout= (new System.Random()).Next(mintimeout, maxtimeout)
@@ -40,6 +42,8 @@ type Node(name:string, endpoint:string, config:string list) as me=
     let mutable _stepwait  = 1000
     let mutable _votes: Set<string> = Set.empty
     let mutable _heartbeats: Set<string> = Set.empty
+    let mutable _clientcmdid = 0
+    let mutable _clientcmdtimeout = 0
 
     //for testing
     let mutable _killtimer=Stopwatch.StartNew()
@@ -61,6 +65,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
     //state machine logging
     let mutable _zlogPrevState=""
     let zlogState stagex =
+        Monitor.Enter lockobj
         let obj ={|
                 _kind       = "node" + _id
                 stamp       = 0 //stamp is added latter to log only changed states
@@ -70,7 +75,8 @@ type Node(name:string, endpoint:string, config:string list) as me=
                 logBaseTerm = _logBaseTerm
                 currTerm    = _currTerm            
                 votedFor    = _currTerm
-                log         = _log |> List.truncate 10 
+                log         = _log |> List.truncate 10
+                loglen      = _log.Length 
                 //Volatile
                 commIndex   = _commIndex
                 lastApplied = _lastApplied
@@ -84,29 +90,37 @@ type Node(name:string, endpoint:string, config:string list) as me=
             _zlogPrevState <-json
             let obj={|obj with stamp=stamp()|}
             let json=JsonConvert.SerializeObject(obj)
-            me.zlog json
+            // me.zlog json
             zdblog _id obj.stamp json
+        Monitor.Exit lockobj
+
     let zlogStateMsg (msg:Message) =
+        Monitor.Enter lockobj
         let json=JsonConvert.SerializeObject(msg)
-        me.zlog json
+        // me.zlog json
         zdblog _id msg.stamp json
+        Monitor.Exit lockobj
+
     let zlogStateCmd cmdx =
+        Monitor.Enter lockobj
         let obj ={|
             _kind  = "Command"
             stamp  = stamp()
             cmd    = cmdx
             |}
         let json=JsonConvert.SerializeObject(obj)
-        me.zlog json
+        // me.zlog json
         zdblog _id obj.stamp json
+        Monitor.Exit lockobj
 
-    let _statemachine=new MailboxProcessor<Message>( fun inbox ->
+    let _raftFSM=new MailboxProcessor<Message>( fun inbox ->
         //===================================================================
-        let rec followerState (stage:int) =
-            zlogState stage
-            async{                
-                _state <- NodeState.FOLLOWER
-                me.zlog <| sprintf "%A%s" _state me.plog
+        let rec followerState (stage:int) =            
+            async{
+                _state <- NodeState.FOLLOWER    
+                zlogState stage
+
+                me.zlog <| sprintf "%A%A%s" _state stage me.plog
                 if 0=stage then
                     me.zlog <| sprintf "init %A" _state
                     me.TimerRestart()
@@ -256,11 +270,13 @@ type Node(name:string, endpoint:string, config:string list) as me=
                 return! followerState 1
             }
         //===================================================================
-        and candidateState (stage:int) =
-            zlogState stage
+        and candidateState (stage:int) =            
             async{
                 _state <- NodeState.CANDIDATE
-                me.zlog <| sprintf "%A" _state
+                zlogState stage
+
+
+                me.zlog <| sprintf "%A%A" _state stage
                 if 0=stage then
                     me.zlog <| sprintf "init %A" _state
 
@@ -324,10 +340,12 @@ type Node(name:string, endpoint:string, config:string list) as me=
             }
         //====================================================================
         and leaderState (stage:int) =
-            zlogState stage
             async{
                 _state <- NodeState.LEADER
-                me.zlog <| sprintf "%A  %s" _state me.plog
+                zlogState stage
+
+
+                me.zlog <| sprintf "%A%A  %s" _state stage me.plog
                 if 0=stage then
                     me.zlog <| sprintf "init %A" _state
                     me.TimerRestart()
@@ -376,15 +394,24 @@ type Node(name:string, endpoint:string, config:string list) as me=
                     peers |> List.iter heartbeatFun                    
                     ()
 
-                if triggerClientMsg.IsSome then
-                    let ccmd = triggerClientMsg.Value
-                    triggerClientMsg <- None                 
-                    me.zlog <|  sprintf "\n\n\n===============\nClient msg : %A" ccmd
-
-                    zlogStateCmd ccmd
-
-                    _log <- {term=_currTerm; cmd=ccmd } :: _log                        
+                // if triggerClientMsg.IsSome then
+                //     let ccmd = triggerClientMsg.Value
+                //     triggerClientMsg <- None                 
+                //     me.zlog <|  sprintf "\n\n\n===============\nClient msg : %A" ccmd
+                //     zlogStateCmd ccmd
+                //     _log <- {term=_currTerm; cmd=ccmd } :: _log                     
                     
+                //     peers |> List.iter heartbeatFun 
+                //     ()
+
+                // Simulate reseived client commands
+                if _clientcmdtimeout < stamp() && 1 = System.Random().Next(1, 10) then
+                    _clientcmdtimeout <- stamp() + 500
+                    let ccmd = sprintf "%scmd%A" _id _clientcmdid
+                    _clientcmdid <- _clientcmdid + 1
+                    me.zlog <|  sprintf "\n\n\n===============\nClient msg : %A" ccmd
+                    zlogStateCmd ccmd
+                    _log <- {term=_currTerm; cmd=ccmd } :: _log
                     peers |> List.iter heartbeatFun 
                     ()
 
@@ -544,9 +571,9 @@ type Node(name:string, endpoint:string, config:string list) as me=
         ()
 
     member me.TimerRestart()=
-        _timer<-Stopwatch.StartNew()    
+        _timebase<- System.DateTime.UtcNow//Stopwatch.StartNew()    
     member me.elapsed
-        with get() = int _timer.Elapsed.TotalMilliseconds
+        with get() = int (System.DateTime.UtcNow - _timebase).TotalMilliseconds
 
     member me.udpthread=new Thread( fun () ->
         while true do
@@ -554,26 +581,26 @@ type Node(name:string, endpoint:string, config:string list) as me=
             let msg=ParseMessage r.RemoteEndPoint r.Buffer
 
             //dedublicate and then post
-            _statemachine.Post(msg)
+            _raftFSM.Post(msg)
             ()
         )    
-    member me.clientthread=new Thread( fun () ->
-        let mutable i=0
-        while true do
-            Thread.Sleep(4000)
-            triggerClientMsg <- Some (sprintf "%scmd%A" _id i)
-            i <- i + 1
+    // member me.clientthread=new Thread( fun () ->
+    //     let mutable i=0
+    //     while true do
+    //         Thread.Sleep(4000)
+    //         triggerClientMsg <- Some (sprintf "%scmd%A" _id i)
+    //         i <- i + 1
 
-        // Thread.Sleep(8000)
-        // triggerClientMsg <- Some "cmd0"
-        // Thread.Sleep(8000)
-        // triggerClientMsg <- Some "cmd1"        
+    //     // Thread.Sleep(8000)
+    //     // triggerClientMsg <- Some "cmd0"
+    //     // Thread.Sleep(8000)
+    //     // triggerClientMsg <- Some "cmd1"        
 
-        )     
+    //     )     
     member public me.Start()=  
-        _statemachine.Start()
+        _raftFSM.Start()
         me.udpthread.Start()
-        me.clientthread.Start()
+        //me.clientthread.Start()
         
 
 
