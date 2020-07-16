@@ -27,9 +27,11 @@ function handleWlogWindow(w){
 
     for (var i = 0; i < w.stamps.length; i++) {
         //zlog(w.stamps[i])
-        var tr = document.createElement("TR");                 // Create a <li> node
-        var textnode = document.createTextNode( w.stamps[i] );
-        tr.appendChild(textnode);         // Create a text node
+        var tr = document.createElement("TR");                 
+        var tn = document.createTextNode( w.stamps[i] );
+        var td=document.createElement("TD");
+        td.appendChild(tn);  
+        tr.appendChild(td)      
         for (var j = 0; j < w.ndmsgs.length; j++) {
             var td = document.createElement("TD");
             td.setAttribute("id", "wlog_" + w.stamps[i] + "_" + (j+1) );
@@ -98,7 +100,7 @@ function updateMaxStamp(){
     fetch('/api/v1/maxstamp')
     .then(response => response.json())
     .then(data => {
-        zlog(data)
+        //zlog(data)
         document.getElementById('minstampid').setAttribute('max',data)        
     });
     setTimeout(updateMaxStamp, 5000)
@@ -157,3 +159,12 @@ function createCtrs(count){
     }
 }
 createCtrs(3)
+
+document.getElementById('btnstepid').addEventListener("click", function(){
+    var e = document.getElementById('minstampid')
+    let tbl=document.getElementById('tblid_wlogs')
+    let x=tbl.rows[2].cells[0]
+    //zlog(x)
+    e.value = x.innerHTML
+    updatewlogs(e.value)
+})

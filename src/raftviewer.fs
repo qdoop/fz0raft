@@ -26,10 +26,13 @@ let maxStampWebHandler (nodes:Node list) : WebPart =
 let windowWebHandler (nodes:Node list) : WebPart =
     fun (cxt : HttpContext) ->  async {
         
-        
-        let txt0=Encoding.UTF8.GetString (cxt.request.rawForm)
+        let minstamp = 
+            match cxt.request.queryParam "minstamp" with
+            | Choice1Of2 minstamp -> minstamp
+            | _ -> "0"
+        let minstamp = int minstamp
 
-        let txt = JsonConvert.SerializeObject(zdblogWindow 0 30000)
+        let txt = JsonConvert.SerializeObject(zdblogWindow minstamp ( minstamp + 10000))
 
         return! Successful.OK txt cxt
     }
