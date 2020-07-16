@@ -19,7 +19,7 @@ CONSENSUS: BRIDGING THEORY AND PRACTICE  PhD thesis of Diego Ongaro
 # How to start
 Just run the debuger ...
 
-Now you have a protocol viewer. Just open http://127.0.0.1:8080/ to see the rollup
+Now we have a protocol viewer. Just open http://127.0.0.1:8080/ to see the rollup
 
 # Testing
 Play with the following line inside nodeAraft.fs just to see how the 

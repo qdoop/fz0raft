@@ -2,14 +2,31 @@ const zlog=console.log
 
 zlog("started main.js...")
 
+
+
+
 var wlogs={}
 
-function handleWindow(w){
-    zlog(w)
+function handleWlogWindow(w){
+    //zlog(w)
     let tbl=document.getElementById('tblid_wlogs')
+    tbl.innerHTML=""
+
+    var tr = document.createElement("TR");
+    var th = document.createElement("TH");
+    var tn = document.createTextNode( "stamp" );
+    th.appendChild(tn)
+    tr.appendChild(th)
+    for (var j = 0; j < w.ndmsgs.length; j++) {
+        var th = document.createElement("TH");
+        var tn = document.createTextNode( "node" +(j+1) )
+        th.appendChild(tn)
+        tr.appendChild(th)
+    }
+    tbl.appendChild(tr)
 
     for (var i = 0; i < w.stamps.length; i++) {
-        zlog(w.stamps[i])
+        //zlog(w.stamps[i])
         var tr = document.createElement("TR");                 // Create a <li> node
         var textnode = document.createTextNode( w.stamps[i] );
         tr.appendChild(textnode);         // Create a text node
@@ -27,7 +44,7 @@ function handleWindow(w){
 
             var e=w.ndmsgs[j][i];            
             var x=JSON.parse(e.log);
-            zlog(x)
+            //zlog(x)
 
             var td=document.getElementById("wlog_" + x.stamp + "_" +(j+1))
 
@@ -43,7 +60,6 @@ function handleWindow(w){
                 txt=txt+">"
             }
 
-
             let id="wbtnid_" + btnid;
             btnid++;
             wlogs[id]=x
@@ -51,7 +67,9 @@ function handleWindow(w){
             btn.setAttribute("id", id)
             btn.addEventListener("click", function(){
                 let id = this.getAttribute("id")
-                zlog(wlogs[id])
+                zlog(wlogs[id])                
+                let txt=JSON.stringify(wlogs[id],null,"  ")
+                document.getElementById("tawlogid").value=txt
             }); 
             // 
             var tn = document.createTextNode( txt )
@@ -62,13 +80,80 @@ function handleWindow(w){
         }
     }
 
-
-
-
-
-
 }
 
-fetch('/api/v1/window')
-  .then(response => response.json())
-  .then(data => handleWindow(data));
+function updatewlogs(minstamp){
+    fetch('/api/v1/window?minstamp='+minstamp)
+    .then(response => response.json())
+    .then(data => handleWlogWindow(data));
+}
+
+updatewlogs(0)
+document.getElementById('minstampid').addEventListener("change", function(){
+    zlog(this.value)
+    updatewlogs(this.value)
+})
+
+function updateMaxStamp(){
+    fetch('/api/v1/maxstamp')
+    .then(response => response.json())
+    .then(data => {
+        zlog(data)
+        document.getElementById('minstampid').setAttribute('max',data)        
+    });
+    setTimeout(updateMaxStamp, 5000)
+}
+updateMaxStamp()
+
+
+function createCtrs(count){
+    var div=document.getElementById('ctrlsactionsid')
+    for(var i=0; i<count; i++){
+
+        div.appendChild(document.createTextNode( 'node' +(i+1)))
+        div.appendChild(document.createElement('BR'))
+        var btn=document.createElement('BUTTON')
+        var tn=document.createTextNode( 'STOP')
+        btn.appendChild(tn)
+        btn.addEventListener("click", function(){
+            fetch('/api/v1/control?action=STOP&node='+(i+1))
+            .then(response => response.json())
+        })
+        div.appendChild(btn)
+        div.appendChild(document.createElement('BR'))
+
+        btn=document.createElement('BUTTON')
+        tn=document.createTextNode( 'RESUME')
+        btn.appendChild(tn)
+        btn.addEventListener("click", function(){
+            fetch('/api/v1/control?action=RESUME&node='+(i+1))
+            .then(response => response.json())
+        })
+        div.appendChild(btn)
+        div.appendChild(document.createElement('BR'))
+
+
+        btn=document.createElement('BUTTON')
+        tn=document.createTextNode( 'RESTART')
+        btn.appendChild(tn)
+        btn.addEventListener("click", function(){
+            fetch('/api/v1/control?action=RESTART&node='+(i+1))
+            .then(response => response.json())
+        })
+        div.appendChild(btn)
+        div.appendChild(document.createElement('BR'))
+
+        btn=document.createElement('BUTTON')
+        tn=document.createTextNode( 'ClientCmd')
+        btn.appendChild(tn)
+        btn.addEventListener("click", function(){
+            fetch('/api/v1/control?action=ClientCmd&node='+(i+1))
+            .then(response => response.json())
+        })
+        div.appendChild(btn)
+        div.appendChild(document.createElement('BR'))
+
+        div.appendChild(document.createElement('HR'))
+    }
+}
+createCtrs(3)

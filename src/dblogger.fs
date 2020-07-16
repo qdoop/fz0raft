@@ -55,15 +55,19 @@ let zdblogGetSizes () =
     let res=dbzlogcollections |> List.map ( fun x ->  x.Count() )
     res
 
-let zdblogGMaxStamps () =
+let zdblogGetMaxStamp () =
     let res=dbzlogcollections |> List.map ( fun x ->
         let cnt = x.Count() 
         let res = x.Find( (fun x -> x.Id=cnt) ) 
-        printfn "%A"  res    
-        let res= Seq.item 0 res
-        res.stamp
+        //printfn "%A"  res    
+        if (Seq.isEmpty res) then 
+            1000 
+        else 
+            let res =Seq.item 0 res
+            res.stamp
+
         )
-    res
+    List.max res
 
 let zdblogWindow minstamp maxstamp =
     let res0=dbzlogcollections |> List.map ( fun x ->

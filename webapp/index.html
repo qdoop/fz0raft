@@ -19,22 +19,30 @@
 <body style="overflow-x: none;">
     <div style="font-family:monospace; width: 98vw;">
         <div>
-            xxxx111
+            <h1>Raft Viewer</h1>
         </div>
-
         <div>
-            <table id="tblid_wlogs">
-                <tr>
-                    <th>stamp</th>
-                    <th>node1</th>
-                    <th>node2</th>
-                    <th>node3</th>
-                </tr>
-            </table>
-        </div>
 
+        </div>
+        <div style="">
+            <div style="display: inline-block; border: 1px solid black;">
+                <input id="minstampid" type="range" min="0" max="10000" value="0" style="width: 98%;">
+                <hr>
+                <table id="tblid_wlogs">
+                </table>
+            </div>
+
+            <div id="ctrlsactionsid" class="fixedposctrls" style="display: inline-block; border: 1px solid black;vertical-align: top;">
+            </div>
+
+            <div class="fixedpos" style="border: 1px solid black;vertical-align: top;">
+                <textarea name="tawlogid" id="tawlogid" cols="60"
+                    rows="40"> Click on a state button to see the currrent state</textarea>
+            </div>
+        </div>
     </div>
 
+    <!-- <script src="/webapp/libs/reload.js "></script> -->
     <script src="/webapp/main.js "></script>
 </body>
 

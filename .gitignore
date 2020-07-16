@@ -5,3 +5,4 @@
 .fake
 
 *.db
+log*.txt
