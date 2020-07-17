@@ -22,6 +22,7 @@
     <!-- raft implementation files -->
     <Compile Include="src/_messages.fs" />
     <Compile Include="src/helpers.fs" />
+    <Compile Include="src/_externstate.fs" /> 
     <Compile Include="src/_nodeAraft.fs" /> 
     <Compile Include="src/_client.fs" /> 
 

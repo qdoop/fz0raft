@@ -50,6 +50,8 @@ type Node(name:string, endpoint:string, config:string list) as me=
     let mutable _killtimer=Stopwatch.StartNew()
     let mutable _killonce = false
 
+
+    
     //================================== RAFT STATE
     //Percistent
     let mutable _logBaseIndex=0  //SPECIAL FOR SNAPSHOTS
@@ -424,6 +426,9 @@ type Node(name:string, endpoint:string, config:string list) as me=
                     _lastApplied <- _lastApplied + 1
                     //apply _log[_lastApplied] to state machine
                     me.zlog <| sprintf "------------------------------apply _log[%A]" _lastApplied
+
+                    me.externstate.ApplyCommand( _lastApplied, _log.[_lastApplied - _logBaseIndex - 1])
+
                     me.logTruncate( _lastApplied )
                     ()
 
@@ -558,7 +563,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
 
 
 
-       
+    member me.externstate:ExternState=new ExternState()   
     member me.state 
         with get () =       _state
         and set (value) = 
@@ -570,7 +575,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
         with get () = _log.Length + _logBaseIndex
 
     member me.logTruncate(applied)=
-        let keeplen=50
+        let keeplen=1000
         if 2*keeplen < (applied - _logBaseIndex) then
             me.zlog <| sprintf "~~~~~~~~~ Truncating..."
             let keep= List.truncate (_log.Length - keeplen) _log
