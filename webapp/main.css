@@ -11,3 +11,19 @@
     right: 550px;
    
 }
+
+.ctrlsfixed{
+    position: fixed;
+    top:40px;
+    right: 60vw;
+    left: 10px;
+}
+
+.tblfixed{
+    position: fixed;
+    top:80px;
+    left:10px;
+    bottom: 10px;
+    overflow-y: scroll;
+    border: 1px solid black;
+}

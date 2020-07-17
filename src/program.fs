@@ -23,7 +23,9 @@ let main argv =
     zdblogclear()
 
     let nodes= config |> List.mapi (fun i x -> new Node(string (i+1), x,config))
-    let nodesrunning =nodes |> List.map ( fun(x) -> x.Start() ) 
+    let nodesrunning =nodes |> List.map ( fun(x) -> x.Start() )
+
+    let client = new ClientNode("127.0.0.1:12009", config) 
 
     dbviewer nodes
 

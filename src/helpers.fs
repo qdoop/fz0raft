@@ -49,7 +49,18 @@ let ParseMessage (edp:IPEndPoint) (payload:byte array) =
             msg <- JsonConvert.DeserializeObject<AppendEntriesA>(json)
         elif 0=json.IndexOf(prefix + "AppendEntriesB") then
             msg <- JsonConvert.DeserializeObject<AppendEntriesB>(json)
-
+        //=============================
+        elif 0=json.IndexOf(prefix + "ClientMsgA") then
+            msg <- JsonConvert.DeserializeObject<ClientMsgA>(json)
+        elif 0=json.IndexOf(prefix + "ClientMsgB") then
+            msg <- JsonConvert.DeserializeObject<ClientMsgB>(json)
+        //=============================
+        elif 0=json.IndexOf(prefix + "CtrlMsgSTOP") then
+            msg <- JsonConvert.DeserializeObject<CtrlMsgSTOP>(json)
+        elif 0=json.IndexOf(prefix + "CtrlMsgRESUME") then
+            msg <- JsonConvert.DeserializeObject<CtrlMsgRESUME>(json)
+        elif 0=json.IndexOf(prefix + "CtrlMsgRESTART") then
+            msg <- JsonConvert.DeserializeObject<CtrlMsgRESTART>(json)           
 
         assert(json=JsonConvert.SerializeObject(msg))        
         msg.src <- edp.ToString()

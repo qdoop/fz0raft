@@ -53,6 +53,34 @@ type AppendEntriesB(src, req:AppendEntriesA, term:int, success:bool )=
     member me.success=success
 
 
+//========================================
+type ClientMsgA(src, uid:System.Guid, cmd:string)=
+    inherit Message(src)
+    member me._kind="ClientMsgA"
+    member me.uid = uid
+    member me.cmd = cmd
+
+type ClientMsgB(src, req:ClientMsgA, rpl:string)=
+    inherit Message(src)
+    member me._kind="ClientMsgB"
+    member me.req=req
+    member me.rpl = rpl
+
+//=============================================
+type CtrlMsgSTOP(src)=
+    inherit Message(src)
+    member me._kind="CtrlMsgSTOP"
+
+type CtrlMsgRESUME(src)=
+    inherit Message(src)
+    member me._kind="CtrlMsgRESUME"
+
+type CtrlMsgRESTART(src)=
+    inherit Message(src)
+    member me._kind="CtrlMsgRESTART"
+
+
+
 
 
 

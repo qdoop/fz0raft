@@ -20,9 +20,10 @@
     <Compile Include="src/filelogger.fs" />
 
     <!-- raft implementation files -->
-    <Compile Include="src/messages.fs" />
+    <Compile Include="src/_messages.fs" />
     <Compile Include="src/helpers.fs" />
-    <Compile Include="src/nodeAraft.fs" /> 
+    <Compile Include="src/_nodeAraft.fs" /> 
+    <Compile Include="src/_client.fs" /> 
 
     <Compile Include="src/raftviewer.fs" />
 

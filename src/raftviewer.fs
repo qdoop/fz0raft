@@ -38,6 +38,31 @@ let windowWebHandler (nodes:Node list) : WebPart =
     }
 
 
+let controlWebHandler (nodes:Node list) : WebPart =
+    fun (cxt : HttpContext) ->  async {
+        
+        let action = 
+            match cxt.request.queryParam "action" with
+            | Choice1Of2 action -> action
+            | _ -> "NONE"
+
+        let node = 
+            match cxt.request.queryParam "node" with
+            | Choice1Of2 node -> node
+            | _ -> "0"
+        let node = (int node) - 1
+
+        if -1<node && node<nodes.Length then
+            match action with
+            | "STOP"    -> nodes.[node].stop()
+            | "RESUME"  -> nodes.[node].resume()
+            | "RESTART" -> nodes.[node].restart()
+            | _         -> ()
+
+        let txt = "{}"
+        return! Successful.OK txt cxt
+    }
+
 let opts=InclusiveOption<string list>.All
 let allcors=CORS.cors {defaultCORSConfig with allowedUris=opts; }
 
@@ -51,6 +76,7 @@ let dbviewer (nodes:Node list)=
 
             GET     >=> path "/api/v1/maxstamp"   >=> allcors  >=> maxStampWebHandler nodes
             GET     >=> path "/api/v1/window"     >=> allcors  >=> windowWebHandler nodes
+            GET     >=> path "/api/v1/control"    >=> allcors  >=> controlWebHandler nodes
 
             GET     >=> Files.browseHome
             ]

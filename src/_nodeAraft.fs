@@ -14,9 +14,10 @@ open MyNamespace.filelogger
 
 
 type NodeState =
-    | FOLLOWER  = 0
-    | CANDIDATE = 1
-    | LEADER    = 2
+    | STOPPED   = 0  //Special case to allow node control
+    | FOLLOWER  = 1
+    | CANDIDATE = 2
+    | LEADER    = 3
 
 
 type Node(name:string, endpoint:string, config:string list) as me=
@@ -24,7 +25,6 @@ type Node(name:string, endpoint:string, config:string list) as me=
     let peers = List.filter (fun x -> x<>endpoint ) config
 
     let _id = name.Substring(name.Length-1)
-
     let mutable _state= NodeState.FOLLOWER
 
     let mutable _timebase=System.DateTime.UtcNow//Stopwatch.StartNew()
@@ -42,6 +42,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
     let mutable _stepwait  = 1000
     let mutable _votes: Set<string> = Set.empty
     let mutable _heartbeats: Set<string> = Set.empty
+    let mutable _stoppedStatePrev=fun (i:int) -> async{return()}
     let mutable _clientcmdid = 0
     let mutable _clientcmdtimeout = 0
 
@@ -49,6 +50,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
     let mutable _killtimer=Stopwatch.StartNew()
     let mutable _killonce = false
 
+    //================================== RAFT STATE
     //Percistent
     let mutable _logBaseIndex=0  //SPECIAL FOR SNAPSHOTS
     let mutable _logBaseTerm=0   //SPECIAL FOR SNAPSHOTS
@@ -61,6 +63,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
     //Leader only
     let mutable _nextIndex:Map<string,int>=Map.empty
     let mutable _matchIndex:Map<string,int>=Map.empty
+    //===========================================
 
     //state machine logging
     let mutable _zlogPrevState=""
@@ -139,8 +142,6 @@ type Node(name:string, endpoint:string, config:string list) as me=
 
                 let! msg=inbox.TryReceive(_stepwait)
                 if msg.IsSome then zlogStateMsg msg.Value
-                if msg.IsSome then 
-                    me.TimerRestart()
                 match msg with
                 |None     ->
                             return! followerState 1
@@ -149,6 +150,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
                             me.zlog <| sprintf "%A %A %A" mx  (mx.hasterm())  me.elapsed
                             match mx with
                             | :? RequestVoteA as m   ->
+                                me.TimerRestart()
                                 if m.term > _currTerm then
                                     _currTerm <- m.term
                                     _votedFor <- None //IMPORTANT
@@ -198,7 +200,8 @@ type Node(name:string, endpoint:string, config:string list) as me=
                                     return! followerState 0   
                                 ()
 
-                            | :? AppendEntriesA as m ->   
+                            | :? AppendEntriesA as m ->
+                                me.TimerRestart()   
                                 if m.term > _currTerm then
                                     _currTerm <- m.term
                                     _votedFor <- None //IMPORTANT
@@ -262,9 +265,15 @@ type Node(name:string, endpoint:string, config:string list) as me=
                                     _currTerm <- m.term
                                     _votedFor <- None //IMPORTANT
                                     return! followerState 0   
-                                () 
+                                ()
+                            | :? ClientMsgA as m      ->
+                                ()
+                            | :? CtrlMsgSTOP as m      ->
+                                _stoppedStatePrev <- followerState
+                                return! stoppedState 0
+                                ()                                 
                             |  _                      ->
-                                assert(false)    
+                                return! stoppedState 0   
                                 ()
 
                 return! followerState 1
@@ -332,8 +341,14 @@ type Node(name:string, endpoint:string, config:string list) as me=
                                 ()
                             | :? AppendEntriesB as m  ->   
                                 ()
+                            | :? ClientMsgA as m      ->
+                                ()
+                            | :? CtrlMsgSTOP as m      ->
+                                _stoppedStatePrev <- candidateState
+                                return! stoppedState 0
+                                ()  
                             |  _                      ->
-                                assert(false)    
+                                return! stoppedState 0    
                                 ()
 
                 return! candidateState 1
@@ -394,38 +409,16 @@ type Node(name:string, endpoint:string, config:string list) as me=
                     peers |> List.iter heartbeatFun                    
                     ()
 
-                // if triggerClientMsg.IsSome then
-                //     let ccmd = triggerClientMsg.Value
-                //     triggerClientMsg <- None                 
+                // Simulate reseived client commands
+                // if _clientcmdtimeout < stamp() && 1 = System.Random().Next(1, 10) then
+                //     _clientcmdtimeout <- stamp() + 500
+                //     let ccmd = sprintf "%scmd%A" _id _clientcmdid
+                //     _clientcmdid <- _clientcmdid + 1
                 //     me.zlog <|  sprintf "\n\n\n===============\nClient msg : %A" ccmd
                 //     zlogStateCmd ccmd
-                //     _log <- {term=_currTerm; cmd=ccmd } :: _log                     
-                    
+                //     _log <- {term=_currTerm; cmd=ccmd } :: _log
                 //     peers |> List.iter heartbeatFun 
                 //     ()
-
-                // Simulate reseived client commands
-                if _clientcmdtimeout < stamp() && 1 = System.Random().Next(1, 10) then
-                    _clientcmdtimeout <- stamp() + 500
-                    let ccmd = sprintf "%scmd%A" _id _clientcmdid
-                    _clientcmdid <- _clientcmdid + 1
-                    me.zlog <|  sprintf "\n\n\n===============\nClient msg : %A" ccmd
-                    zlogStateCmd ccmd
-                    _log <- {term=_currTerm; cmd=ccmd } :: _log
-                    peers |> List.iter heartbeatFun 
-                    ()
-
-
-                if _killonce && "12003"=name && 10000 < int _killtimer.Elapsed.TotalMilliseconds then
-                    _killonce <- false
-                    Async.Sleep(30000) |> Async.RunSynchronously
-                    // _killtimer <- Stopwatch.StartNew()
-
-                if 0 = System.Random().Next(1, 500) then
-                    me.zlog <| sprintf "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ KILLED!!!"
-                    Async.Sleep(30000) |> Async.RunSynchronously
-                    me.zlog <| sprintf "**************************************** ALIVE!!!"
-
 
                 if _commIndex > _lastApplied then
                     _lastApplied <- _lastApplied + 1
@@ -489,13 +482,55 @@ type Node(name:string, endpoint:string, config:string list) as me=
                                         ()
                                     return! leaderState 1
                                 () 
-                            |  _                      ->
-                                assert(false)    
+                            | :? ClientMsgA as m      ->
+                                me.zlog <|  sprintf "\n\n\n===============\nClient msg : %A" m.cmd
+                                _log <- {term=_currTerm; cmd=m.cmd } :: _log
+                                peers |> List.iter heartbeatFun
+
+                                let msg= new ClientMsgB("",m,"xxx")
+                                me.SendMessage(m.src, msg)
+                                return! leaderState 1 
+                                ()
+                            | :? CtrlMsgSTOP as m      ->
+                                _stoppedStatePrev <- leaderState
+                                return! stoppedState 0
+                                () 
+                            |  _                      ->                   
+                                return! stoppedState 0    
                                 ()
 
                 return! leaderState 1
             }
-        
+        and stoppedState (stage:int) =   //Special state to allow simulation control         
+            async{
+                _state <- NodeState.STOPPED
+                zlogState stage
+
+                let! msg=inbox.TryReceive(_stepwait)
+                // if msg.IsSome then zlogStateMsg msg.Value
+                match msg with
+                |None     ->
+                            return! stoppedState 1
+                            ()
+                |Some mx -> 
+                            me.zlog <| sprintf "%A %A" mx me.elapsed
+                            match mx with 
+                            | :? CtrlMsgRESUME as m   ->
+                                return! _stoppedStatePrev 1
+                                ()
+                            | :? CtrlMsgRESTART as m   ->
+                                //reinit volatile state
+                                _commIndex   <- _logBaseIndex // 0 //SPECIAL FOR SNAPSHOTS
+                                _lastApplied <- _logBaseIndex // 0 //SPECIAL FOR SNAPSHOTS    
+                                _nextIndex   <- Map.empty
+                                _matchIndex  <- Map.empty
+                                return! followerState 0
+                                ()      
+                            |  _                     ->    
+                                ()
+                return! stoppedState 1
+            }    
+
         me.TimerRestart()
         followerState 0
         )
@@ -544,6 +579,12 @@ type Node(name:string, endpoint:string, config:string list) as me=
             _log <- keep
 
 
+    member me.stop()=    
+        _raftFSM.Post( new CtrlMsgSTOP("web"))
+    member me.resume()=  
+        _raftFSM.Post( new CtrlMsgRESUME("web"))
+    member me.restart()=  
+        _raftFSM.Post( new CtrlMsgRESTART("web"))
 
     member me.zlog s=
         Monitor.Enter lockobj

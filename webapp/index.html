@@ -21,14 +21,13 @@
         <div>
             <h1>Raft Viewer</h1>
         </div>
-        <div>
-
+        <div class="ctrlsfixed">
+            <input id="minstampid" type="range" min="0" max="10000" value="0" style="width: 70%;">
+            <button id="btnstepid">STEP</button>
+            <hr>
         </div>
-        <div style="">
-            <div style="display: inline-block; border: 1px solid black;">
-                <input id="minstampid" type="range" min="0" max="10000" value="0" style="width: 70%;">
-                <button id="btnstepid">STEP</button>
-                <hr>
+        <div class="tblfixed">
+            <div style="display: inline-block; ">
                 <table id="tblid_wlogs">
                 </table>
             </div>

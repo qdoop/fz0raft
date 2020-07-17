@@ -22,9 +22,4 @@ Just run the debuger ...
 Now we have a protocol viewer. Just open http://127.0.0.1:8080/ to see the rollup
 
 # Testing
-Play with the following line inside nodeAraft.fs just to see how the 
-replicated log survives random leader stops (crashes) and  resumes
-
-                if 1 = System.Random().Next(1, 500) then
-                    me.zlog <| sprintf "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ KILLED!!!"
-                    ...
+Stop and resume the nodes from the viewer

@@ -112,13 +112,15 @@ function createCtrs(count){
     var div=document.getElementById('ctrlsactionsid')
     for(var i=0; i<count; i++){
 
-        div.appendChild(document.createTextNode( 'node' +(i+1)))
+        let node=i+1;
+
+        div.appendChild(document.createTextNode( 'node' +node))
         div.appendChild(document.createElement('BR'))
         var btn=document.createElement('BUTTON')
         var tn=document.createTextNode( 'STOP')
         btn.appendChild(tn)
         btn.addEventListener("click", function(){
-            fetch('/api/v1/control?action=STOP&node='+(i+1))
+            fetch('/api/v1/control?action=STOP&node='+node)
             .then(response => response.json())
         })
         div.appendChild(btn)
@@ -128,7 +130,7 @@ function createCtrs(count){
         tn=document.createTextNode( 'RESUME')
         btn.appendChild(tn)
         btn.addEventListener("click", function(){
-            fetch('/api/v1/control?action=RESUME&node='+(i+1))
+            fetch('/api/v1/control?action=RESUME&node='+node)
             .then(response => response.json())
         })
         div.appendChild(btn)
@@ -139,7 +141,7 @@ function createCtrs(count){
         tn=document.createTextNode( 'RESTART')
         btn.appendChild(tn)
         btn.addEventListener("click", function(){
-            fetch('/api/v1/control?action=RESTART&node='+(i+1))
+            fetch('/api/v1/control?action=RESTART&node='+node)
             .then(response => response.json())
         })
         div.appendChild(btn)
@@ -149,7 +151,7 @@ function createCtrs(count){
         tn=document.createTextNode( 'ClientCmd')
         btn.appendChild(tn)
         btn.addEventListener("click", function(){
-            fetch('/api/v1/control?action=ClientCmd&node='+(i+1))
+            fetch('/api/v1/control?action=ClientCmd&node='+node)
             .then(response => response.json())
         })
         div.appendChild(btn)
