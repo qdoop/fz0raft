@@ -5,8 +5,7 @@ open System.Net
 type LogEntry=
     {term:int
      cmd:string 
-     uid:System.Guid
-     serial:int}
+     uid:System.Guid}
     override  me.ToString() = sprintf "{t=%A,c=%A}" me.term me.cmd
 
 type Message(src:string)=

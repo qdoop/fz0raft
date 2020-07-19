@@ -50,10 +50,9 @@ type Node(name:string, endpoint:string, config:string list) as me=
     let mutable _killonce = false
 
 
-    
+    let _externstate=new ExternState()
     //================================== RAFT STATE
     //Percistent
-    let mutable _cmdserial=0     //SPECIAL used to index cmds
     let mutable _logBaseIndex=0  //SPECIAL FOR SNAPSHOTS
     let mutable _logBaseTerm=0   //SPECIAL FOR SNAPSHOTS
     let mutable _currTerm=0             
@@ -416,7 +415,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
                     //apply _log[_lastApplied] to state machine
                     me.zlog <| sprintf "------------------------------apply _log[%A]" _lastApplied
 
-                    me.externstate.ApplyCommand( _lastApplied, _log.[_lastApplied - _logBaseIndex - 1])
+                    let b=me.externstate.ApplyCommand( _lastApplied, _log.[_lastApplied - _logBaseIndex - 1])
 
                     me.logTruncate( _lastApplied )
                     ()
@@ -478,8 +477,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
                                 () 
                             | :? ClientMsgA as m      ->
                                 me.zlog <|  sprintf "\n\n\n===============\nClient msg : %A" m.cmd
-                                _log <- {term=_currTerm; cmd=m.cmd; uid=m.uid; serial=_cmdserial;} :: _log
-                                _cmdserial <- _cmdserial + 1
+                                _log <- {term=_currTerm; cmd=m.cmd; uid=m.uid;} :: _log
                                 peers |> List.iter heartbeatFun
 
                                 //m.uid <- _log.Head.uid
@@ -552,14 +550,11 @@ type Node(name:string, endpoint:string, config:string list) as me=
             udp.Ttl <- 255s; 
         with
             | ex -> printf "exception: %A\r\n" ex 
-
-        let b=me.externstate.AddCommand(1, {term=1; cmd="xxx"; uid=new System.Guid("ca761232ed4211cebacd00aa0057b223"); serial=0;  })
-        let v=me.externstate.CheckCommand(1)
         ()
 
 
 
-    member me.externstate:ExternState=new ExternState()   
+    member me.externstate:ExternState=  _externstate 
     member me.state 
         with get () =       _state
         and set (value) = 
@@ -630,7 +625,6 @@ type Node(name:string, endpoint:string, config:string list) as me=
         let mutable i=0
         while true do
             Thread.Sleep(0)
-            let v=me.externstate.CheckCommand(1)
             Monitor.Enter lockobj
             match List.tryFindIndex (fun x -> ((snd x)+255_000)<stamp()) _clientcmds with
             | Some pos -> _clientcmds <- List.truncate pos _clientcmds;() 
@@ -640,14 +634,14 @@ type Node(name:string, endpoint:string, config:string list) as me=
                 match list with
                 | head :: tail ->
                                 let m=(fst head)
-                                let v=None //me.externstate.CheckCommand( m.uid )
+                                let v=me.externstate.CheckCommand( m.uid )
                                 match v with
                                 | Some le -> 
                                                 let msg= new ClientMsgB("",m,"ok")
                                                 me.SendMessage(m.src, msg)
                                                 _clientcmds <- _clientcmds |> List.filter ( fun x -> 
                                                     let m0= fst x
-                                                    m0.uid=m.uid
+                                                    m0.uid<>m.uid
                                                     )
                                                 HandleCommand _clientcmds
                                 | None    ->
