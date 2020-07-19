@@ -38,6 +38,7 @@ let windowWebHandler (nodes:Node list) : WebPart =
     }
 
 
+let mutable _webclientmsgid=0
 let controlWebHandler (nodes:Node list) : WebPart =
     fun (cxt : HttpContext) ->  async {
         
@@ -54,9 +55,13 @@ let controlWebHandler (nodes:Node list) : WebPart =
 
         if -1<node && node<nodes.Length then
             match action with
-            | "STOP"    -> nodes.[node].stop()
-            | "RESUME"  -> nodes.[node].resume()
-            | "RESTART" -> nodes.[node].restart()
+            | "STOP"        -> nodes.[node].stop()
+            | "RESUME"      -> nodes.[node].resume()
+            | "RESTART"     -> nodes.[node].restart()
+            | "ClientCmd"   -> 
+                            _webclientmsgid <- _webclientmsgid + 1
+                            let msg=new ClientMsgA("127.0.0.1:12008", System.Guid.NewGuid(), sprintf "web%A" _webclientmsgid)
+                            nodes.[node].clientcmd(msg)
             | _         -> ()
 
         let txt = "{}"

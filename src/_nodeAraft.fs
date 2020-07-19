@@ -595,6 +595,8 @@ type Node(name:string, endpoint:string, config:string list) as me=
         _raftFSM.Post( new CtrlMsgRESUME("web"))
     member me.restart()=  
         _raftFSM.Post( new CtrlMsgRESTART("web"))
+    member me.clientcmd(msg:Message)=  
+        _raftFSM.Post( msg)
 
     member me.zlog s=
         Monitor.Enter lockobj
@@ -617,8 +619,10 @@ type Node(name:string, endpoint:string, config:string list) as me=
         zlogStateMsg msg
         let json=JsonConvert.SerializeObject(msg)
         let payload=System.Text.Encoding.UTF8.GetBytes(json)
-        // Thread.Sleep( (new System.Random()).Next(100))  
-        let txlen=udp.Send(payload, payload.Length, edp)
+        // Thread.Sleep( (new System.Random()).Next(100))
+        if "127.0.0.1:12008" <> string edp then  
+            let txlen=udp.Send(payload, payload.Length, edp)
+            ()
         ()
 
     member me.TimerRestart()=
