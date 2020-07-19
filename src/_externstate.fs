@@ -14,6 +14,8 @@ type ExternState() as me =
 
     let _dic=new System.Collections.Concurrent.ConcurrentDictionary<int, LogEntry>()    
     let _cmds=new System.Collections.Concurrent.ConcurrentDictionary<System.Guid, LogEntry>()
+
+    let mutable _lastuid=System.Guid.NewGuid()
     
     member me.Count
         with get()=_dic.Count 
@@ -25,6 +27,8 @@ type ExternState() as me =
             else
                 None
 
+    member me.CmdCount
+        with get()=_cmds.Count 
     member me.ApplyCommand(index:int, logentry:LogEntry)=
         let v=me.[index]
         if v.IsSome && v.Value.cmd = logentry.cmd then
@@ -37,6 +41,13 @@ type ExternState() as me =
 
     member me.AddCommand(key, logentry:LogEntry)=
         let b=_cmds.TryAdd(key, logentry)
+
+        if _lastuid = key then
+            false
+        else
+            _lastuid <- key
+            true
+
         b
 
     member me.CheckCommand(key)=

@@ -81,6 +81,8 @@ type Node(name:string, endpoint:string, config:string list) as me=
                 votedFor    = _currTerm
                 log         = _log |> List.truncate 10
                 loglen      = _log.Length 
+                exscmdcnt   = me.externstate.CmdCount
+                clientcmds  = _clientcmds.Length
                 //Volatile
                 commIndex   = _commIndex
                 lastApplied = _lastApplied
@@ -123,10 +125,15 @@ type Node(name:string, endpoint:string, config:string list) as me=
                     return! candidateState 0
                     ()
 
-                if _commIndex > _lastApplied then
+                while _commIndex > _lastApplied do
                     _lastApplied <- _lastApplied + 1
                     //apply _log[_lastApplied] to state machine
                     me.zlog <| sprintf "apply _log[%A]" _lastApplied
+
+                    let b=me.externstate.ApplyCommand( _lastApplied, _log.[_log.Length - (_lastApplied - _logBaseIndex)])
+                    if not b then 
+                        assert(b)
+
                     me.logTruncate( _lastApplied )
                     ()
 
@@ -295,10 +302,15 @@ type Node(name:string, endpoint:string, config:string list) as me=
                     return! candidateState 0
                     ()
 
-                if _commIndex > _lastApplied then
+                while _commIndex > _lastApplied do
                     _lastApplied <- _lastApplied + 1
                     //apply _log[_lastApplied] to state machine
                     me.zlog <| sprintf "apply _log[%A]" _lastApplied
+                
+                    let b=me.externstate.ApplyCommand( _lastApplied, _log.[_log.Length - (_lastApplied - _logBaseIndex)])
+                    if not b then 
+                        assert(b)
+
                     me.logTruncate( _lastApplied )
                     ()
 
@@ -410,12 +422,14 @@ type Node(name:string, endpoint:string, config:string list) as me=
                 //     peers |> List.iter heartbeatFun 
                 //     ()
 
-                if _commIndex > _lastApplied then
+                while _commIndex > _lastApplied do
                     _lastApplied <- _lastApplied + 1
                     //apply _log[_lastApplied] to state machine
                     me.zlog <| sprintf "------------------------------apply _log[%A]" _lastApplied
 
-                    let b=me.externstate.ApplyCommand( _lastApplied, _log.[_lastApplied - _logBaseIndex - 1])
+                    let b=me.externstate.ApplyCommand( _lastApplied, _log.[_log.Length - (_lastApplied - _logBaseIndex)])
+                    if not b then                        
+                        assert(b)
 
                     me.logTruncate( _lastApplied )
                     ()
