@@ -9,6 +9,7 @@ open Suave.Operators
 open Suave.Logging
 open System.Threading
 
+open MyNamespace.helpers
 open MyNamespace.Raft
 open MyNamespace.dblogger
 open MyNamespace.filelogger
@@ -61,6 +62,7 @@ let controlWebHandler (nodes:Node list) : WebPart =
             | "ClientCmd"   -> 
                             _webclientmsgid <- _webclientmsgid + 1
                             let msg=new ClientMsgA("127.0.0.1:12008", System.Guid.NewGuid(), sprintf "web%A" _webclientmsgid)
+                            msg.stamp <- stamp()   
                             nodes.[node].clientcmd(msg)
             | _         -> ()
 

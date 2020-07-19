@@ -23,8 +23,9 @@ type ClientNode(endpoint:string, config:string list) as me =
             Thread.Sleep(4000)
             config |> List.iter ( fun x ->
                 let cmd = sprintf "cmd%A" i                    
-                let msg=new ClientMsgA("client", System.Guid.NewGuid(), cmd)                       
+                let msg=new ClientMsgA("client", System.Guid.NewGuid(), cmd)                                  
                 me.SendMessage(x, msg)
+                ()
             )
 
         )
