@@ -43,9 +43,11 @@ let main argv =
 
     // let config=["127.0.0.1:12001";]
 
-    zdblogclear()
+    
 
     let nodes= config |> List.mapi (fun i x -> new Node(string (i+1), x,config))
+
+    zdblogclear()
     let nodesrunning =nodes |> List.map ( fun(x) -> x.Start() )
 
     let client = new ClientNode("127.0.0.1:12009", config) 

@@ -4,12 +4,16 @@ open System.Net
 
 type LogEntry=
     {term:int
-     cmd:string }
+     cmd:string 
+     uid:System.Guid
+     serial:int}
     override  me.ToString() = sprintf "{t=%A,c=%A}" me.term me.cmd
 
 type Message(src:string)=
     let mutable _src=src
     let mutable _stamp=0
+    let mutable _guid=System.Guid.NewGuid()
+
     member me._kind="Message"    
     member me.src
         with get()=_src
@@ -17,6 +21,10 @@ type Message(src:string)=
     member me.stamp
         with get()=_stamp
         and  set(value)= _stamp <- value
+    member me.guid
+        with get()=_guid
+        and  set(value)= _guid <- value
+
 
 type RequestVoteA(src, term:int, candidateId:string, lastLogIndex:int, lastLogTerm:int )=
     inherit Message(src)

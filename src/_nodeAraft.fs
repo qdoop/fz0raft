@@ -43,8 +43,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
     let mutable _votes: Set<string> = Set.empty
     let mutable _heartbeats: Set<string> = Set.empty
     let mutable _stoppedStatePrev=fun (i:int) -> async{return()}
-    let mutable _clientcmdid = 0
-    let mutable _clientcmdtimeout = 0
+    let mutable _clientcmds:(ClientMsgA*int) list = []
 
     //for testing
     let mutable _killtimer=Stopwatch.StartNew()
@@ -54,6 +53,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
     
     //================================== RAFT STATE
     //Percistent
+    let mutable _cmdserial=0     //SPECIAL used to index cmds
     let mutable _logBaseIndex=0  //SPECIAL FOR SNAPSHOTS
     let mutable _logBaseTerm=0   //SPECIAL FOR SNAPSHOTS
     let mutable _currTerm=0             
@@ -106,17 +106,6 @@ type Node(name:string, endpoint:string, config:string list) as me=
         zdblog _id msg.stamp json
         Monitor.Exit lockobj
 
-    let zlogStateCmd cmdx =
-        Monitor.Enter lockobj
-        let obj ={|
-            _kind  = "Command"
-            stamp  = stamp()
-            cmd    = cmdx
-            |}
-        let json=JsonConvert.SerializeObject(obj)
-        // me.zlog json
-        zdblog _id obj.stamp json
-        Monitor.Exit lockobj
 
     let _raftFSM=new MailboxProcessor<Message>( fun inbox ->
         //===================================================================
@@ -489,11 +478,15 @@ type Node(name:string, endpoint:string, config:string list) as me=
                                 () 
                             | :? ClientMsgA as m      ->
                                 me.zlog <|  sprintf "\n\n\n===============\nClient msg : %A" m.cmd
-                                _log <- {term=_currTerm; cmd=m.cmd } :: _log
+                                _log <- {term=_currTerm; cmd=m.cmd; uid=m.uid; serial=_cmdserial;} :: _log
+                                _cmdserial <- _cmdserial + 1
                                 peers |> List.iter heartbeatFun
 
-                                let msg= new ClientMsgB("",m,"xxx")
-                                me.SendMessage(m.src, msg)
+                                //m.uid <- _log.Head.uid
+                                Monitor.Enter lockobj
+                                _clientcmds <- (m, stamp()) :: _clientcmds
+                                Monitor.Exit  lockobj
+
                                 return! leaderState 1 
                                 ()
                             | :? CtrlMsgSTOP as m      ->
@@ -560,6 +553,9 @@ type Node(name:string, endpoint:string, config:string list) as me=
         with
             | ex -> printf "exception: %A\r\n" ex 
 
+        let b=me.externstate.AddCommand(1, {term=1; cmd="xxx"; uid=new System.Guid("ca761232ed4211cebacd00aa0057b223"); serial=0;  })
+        let v=me.externstate.CheckCommand(1)
+        ()
 
 
 
@@ -630,23 +626,44 @@ type Node(name:string, endpoint:string, config:string list) as me=
             _raftFSM.Post(msg)
             ()
         )    
-    // member me.clientthread=new Thread( fun () ->
-    //     let mutable i=0
-    //     while true do
-    //         Thread.Sleep(4000)
-    //         triggerClientMsg <- Some (sprintf "%scmd%A" _id i)
-    //         i <- i + 1
+    member me.clientthread=new Thread( fun () ->
+        let mutable i=0
+        while true do
+            Thread.Sleep(0)
+            let v=me.externstate.CheckCommand(1)
+            Monitor.Enter lockobj
+            match List.tryFindIndex (fun x -> ((snd x)+255_000)<stamp()) _clientcmds with
+            | Some pos -> _clientcmds <- List.truncate pos _clientcmds;() 
+            | None -> ()
 
-    //     // Thread.Sleep(8000)
-    //     // triggerClientMsg <- Some "cmd0"
-    //     // Thread.Sleep(8000)
-    //     // triggerClientMsg <- Some "cmd1"        
+            let rec HandleCommand (list:(ClientMsgA*int)list)=
+                match list with
+                | head :: tail ->
+                                let m=(fst head)
+                                let v=None //me.externstate.CheckCommand( m.uid )
+                                match v with
+                                | Some le -> 
+                                                let msg= new ClientMsgB("",m,"ok")
+                                                me.SendMessage(m.src, msg)
+                                                _clientcmds <- _clientcmds |> List.filter ( fun x -> 
+                                                    let m0= fst x
+                                                    m0.uid=m.uid
+                                                    )
+                                                HandleCommand _clientcmds
+                                | None    ->
+                                                HandleCommand tail
+                                
+                                ()
+                | []            ->
+                                ()
 
-    //     )     
+            HandleCommand _clientcmds
+            Monitor.Exit lockobj
+        )
     member public me.Start()=  
         _raftFSM.Start()
         me.udpthread.Start()
-        //me.clientthread.Start()
+        me.clientthread.Start()
         
 
 

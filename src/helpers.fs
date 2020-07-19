@@ -62,7 +62,9 @@ let ParseMessage (edp:IPEndPoint) (payload:byte array) =
         elif 0=json.IndexOf(prefix + "CtrlMsgRESTART") then
             msg <- JsonConvert.DeserializeObject<CtrlMsgRESTART>(json)           
 
-        assert(json=JsonConvert.SerializeObject(msg))        
+        // printfn "000%s" json
+        // printfn "111%s" (JsonConvert.SerializeObject(msg))
+        assert(json=JsonConvert.SerializeObject(msg))
         msg.src <- edp.ToString()
         msg.stamp <- stamp()        
         msg

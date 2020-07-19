@@ -4,7 +4,16 @@ namespace MyNamespace.Raft
 
 type ExternState() as me =
 
-    let _dic=new System.Collections.Concurrent.ConcurrentDictionary<int, LogEntry>()
+    let eq={
+        new System.Collections.Generic.IEqualityComparer<int> with
+        member me.Equals(x:int, y:int)=   
+            x=y
+        member me.GetHashCode(x:int) = 
+            x
+    }
+
+    let _dic=new System.Collections.Concurrent.ConcurrentDictionary<int, LogEntry>()    
+    let _cmds=new System.Collections.Concurrent.ConcurrentDictionary<int, LogEntry>()
     
     member me.Count
         with get()=_dic.Count 
@@ -23,5 +32,24 @@ type ExternState() as me =
         elif v.IsSome && v.Value.cmd <> logentry.cmd then
             false
         else
-            _dic.TryAdd(index, logentry)
+            let b=me.AddCommand(logentry.serial, logentry)
+            b && _dic.TryAdd(index, logentry)
 
+    member me.AddCommand(key:int, logentry:LogEntry)=
+        let b=_cmds.TryAdd(key, logentry)
+        let b0, v=_cmds.TryGetValue(key)
+        if b0 then
+            Some v
+        else
+            None
+        printfn "b0=%A" b0
+        b
+
+    member me.CheckCommand(key:int)=
+        let b1, v=_cmds.TryGetValue(key)
+        if b1 then
+            Some v
+        else
+            None
+
+        printfn "b1=%A" b1
