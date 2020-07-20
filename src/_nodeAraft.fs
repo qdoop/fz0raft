@@ -11,6 +11,7 @@ open MyNamespace.globals
 open MyNamespace.helpers
 open MyNamespace.dblogger
 open MyNamespace.filelogger
+open System.IO
 
 
 type NodeState =
@@ -18,6 +19,13 @@ type NodeState =
     | FOLLOWER  = 1
     | CANDIDATE = 2
     | LEADER    = 3
+
+type PersistentState()=
+    member val logBaseIndex=0  with get,set//SPECIAL FOR SNAPSHOTS
+    member val logBaseTerm=0   with get,set//SPECIAL FOR SNAPSHOTS
+    member val currTerm=0      with get,set       
+    member val votedFor:string option = None with get,set
+    member val log:LogEntry list=[]  with get,set   //[{term=1;cmd="nope";}]
 
 
 type Node(name:string, endpoint:string, config:string list) as me=
@@ -39,7 +47,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
     //                                 5000
 
     let mutable _heartbeat = 2000
-    let mutable _stepwait  = 1000
+    let mutable _stepwait  = 500
     let mutable _votes: Set<string> = Set.empty
     let mutable _heartbeats: Set<string> = Set.empty
     let mutable _stoppedStatePrev=fun (i:int) -> async{return()}
@@ -383,7 +391,7 @@ type Node(name:string, endpoint:string, config:string list) as me=
                     if me.logIndex >= nextIndex then
 
                         let t0=List.truncate (me.logIndex - nextIndex) _log |> List.rev 
-                        let t1= t0|> List.truncate 2 |> List.toArray
+                        let t1= t0|> List.truncate 10 |> List.toArray
                         //me.log <| sprintf "truncated %A %A %A" me.logIndex  nextIndex t
                         let pos=me.logIndex - _logBaseIndex - t0.Length - 1 
                         // if pos > -1 then
@@ -529,6 +537,9 @@ type Node(name:string, endpoint:string, config:string list) as me=
                                 return! _stoppedStatePrev 1
                                 ()
                             | :? CtrlMsgRESTART as m   ->
+                                
+                                me.loadPersistentState()
+
                                 //reinit volatile state
                                 _commIndex   <- _logBaseIndex // 0 //SPECIAL FOR SNAPSHOTS
                                 _lastApplied <- _logBaseIndex // 0 //SPECIAL FOR SNAPSHOTS    
@@ -589,6 +600,34 @@ type Node(name:string, endpoint:string, config:string list) as me=
             _log <- keep
 
 
+    member me.savePersistentState()=
+        let obj=new PersistentState()
+        obj.logBaseIndex <- _logBaseIndex
+        obj.logBaseTerm  <- _logBaseTerm
+        obj.currTerm     <- _currTerm
+        obj.votedFor     <- _votedFor
+        obj.log          <- _log
+
+        let json = JsonConvert.SerializeObject(obj)
+        let sw = new StreamWriter("pstate" + _id + ".json", false)
+        sw.WriteLine(json)
+        sw.Dispose()
+        ()
+
+    member me.loadPersistentState()=
+        let sr = new StreamReader("pstate" + _id + ".json", true)
+        let line=sr.ReadLine()
+        sr.Dispose()
+        let o=JsonConvert.DeserializeObject<PersistentState>(line)
+
+        _logBaseIndex <- o.logBaseIndex
+        _logBaseTerm  <- o.logBaseTerm
+        _currTerm     <- o.currTerm
+        _votedFor     <- o.votedFor
+        _log          <- o.log
+        ()
+
+
     member me.stop()=    
         _raftFSM.Post( new CtrlMsgSTOP("web"))
     member me.resume()=  
@@ -619,7 +658,9 @@ type Node(name:string, endpoint:string, config:string list) as me=
         zlogStateMsg msg
         let json=JsonConvert.SerializeObject(msg)
         let payload=System.Text.Encoding.UTF8.GetBytes(json)
-        // Thread.Sleep( (new System.Random()).Next(100))
+        
+        me.savePersistentState()
+
         if "127.0.0.1:12008" <> string edp then  
             let txlen=udp.Send(payload, payload.Length, edp)
             ()
