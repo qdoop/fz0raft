@@ -713,7 +713,11 @@ type Node(name:string, endpoint:string, config:string list) as me=
             HandleCommand _clientcmds
             Monitor.Exit lockobj
         )
-    member public me.Start()=  
+    member public me.Start()= 
+        _raftFSM.Error.Add(fun exn ->
+            match exn with
+            | _ -> printfn "AGENT EXCEPTION. id=%A | %A" _id  exn
+                   exit(1) ) 
         _raftFSM.Start()
         me.udpthread.Start()
         me.clientthread.Start()
